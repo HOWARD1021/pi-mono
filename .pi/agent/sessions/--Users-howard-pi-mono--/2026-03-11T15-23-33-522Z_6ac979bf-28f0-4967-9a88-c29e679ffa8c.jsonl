@@ -1,5 +1,0 @@
-{"type":"session","version":3,"id":"6ac979bf-28f0-4967-9a88-c29e679ffa8c","timestamp":"2026-03-11T15:23:33.522Z","cwd":"/Users/howard/pi-mono"}
-{"type":"model_change","id":"bbe4e2e2","parentId":null,"timestamp":"2026-03-11T15:23:33.523Z","provider":"local-cli","modelId":"standard"}
-{"type":"thinking_level_change","id":"26ff900b","parentId":"bbe4e2e2","timestamp":"2026-03-11T15:23:33.523Z","thinkingLevel":"off"}
-{"type":"message","id":"c662c8d2","parentId":"26ff900b","timestamp":"2026-03-11T15:23:33.543Z","message":{"role":"user","content":[{"type":"text","text":"hello through pi"}],"timestamp":1773242613538}}
-{"type":"message","id":"3d43e09e","parentId":"c662c8d2","timestamp":"2026-03-11T15:23:33.620Z","message":{"role":"assistant","content":[{"type":"text","text":"hello through pi"}],"api":"local-cli-text","provider":"local-cli","model":"standard","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":1773242613541}}

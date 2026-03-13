@@ -33,3 +33,9 @@ pi-*.html
 out.html
 packages/coding-agent/binaries/
 todo.md
+
+# pi agent user data (credentials, sessions, binaries)
+.pi/agent/auth.json
+.pi/agent/bin/
+.pi/agent/sessions/
+.pi/agent/*.jsonl
