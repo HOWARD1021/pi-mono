@@ -26,23 +26,93 @@ import { Type, type Static } from "@sinclair/typebox";
 // ─── Local proxy config (same as hello world) ───
 const LOCAL_API_BASE = process.env.LOCAL_LLM_API_BASE ?? "http://localhost:8317/v1";
 const LOCAL_API_KEY  = process.env.LOCAL_LLM_API_KEY  ?? "quotio-local-716AEC5B";
-const LOCAL_MODEL_ID = process.env.LOCAL_LLM_MODEL    ?? "claude-haiku-4.5";
+const PARENT_MODEL_ID = process.env.LOCAL_PARENT_MODEL ?? process.env.LOCAL_LLM_MODEL ?? "gpt-5";
+const SUBAGENT_MODEL_ID = process.env.LOCAL_SUBAGENT_MODEL ?? "claude-haiku-4.5";
+const BASELINE_PARENT_MODEL_ID = process.env.LOCAL_BASELINE_PARENT_MODEL ?? "claude-haiku-4.5";
 
 const baseRef = getModel("openrouter", "openai/gpt-4o");
-const localProxyModel = {
-	...baseRef,
-	provider: "openrouter" as const,
-	id: LOCAL_MODEL_ID,
-	baseUrl: LOCAL_API_BASE,
-	compat: {
-		...baseRef.compat,
-		supportsStore: false,
-		supportsUsageInStreaming: false,
-		supportsDeveloperRole: false,
-		supportsReasoningEffort: false,
-		supportsStrictMode: false,
-	},
-};
+function createLocalProxyModel(modelId: string) {
+	return {
+		...baseRef,
+		provider: "openrouter" as const,
+		id: modelId,
+		baseUrl: LOCAL_API_BASE,
+		compat: {
+			...baseRef.compat,
+			supportsStore: false,
+			supportsUsageInStreaming: false,
+			supportsDeveloperRole: false,
+			supportsReasoningEffort: false,
+			supportsStrictMode: false,
+		},
+	};
+}
+
+const parentProxyModel = createLocalProxyModel(PARENT_MODEL_ID);
+const subagentProxyModel = createLocalProxyModel(SUBAGENT_MODEL_ID);
+
+interface DemoOptions {
+	parentModelId: string;
+	subagentModelId: string;
+	topic?: string;
+	runComparison: boolean;
+}
+
+interface DemoRunSummary {
+	label: string;
+	parentModelId: string;
+	subagentModelId: string;
+	finalSynthesis: string;
+	toolCalls: number;
+}
+
+function parseArgs(argv: string[]): DemoOptions {
+	const options: DemoOptions = {
+		parentModelId: PARENT_MODEL_ID,
+		subagentModelId: SUBAGENT_MODEL_ID,
+		topic: undefined,
+		runComparison: false,
+	};
+
+	for (let i = 0; i < argv.length; i++) {
+		const arg = argv[i];
+		if (arg === "--parent-model") {
+			options.parentModelId = argv[++i] ?? options.parentModelId;
+		} else if (arg === "--subagent-model") {
+			options.subagentModelId = argv[++i] ?? options.subagentModelId;
+		} else if (arg === "--topic") {
+			options.topic = argv[++i] ?? options.topic;
+		} else if (arg === "--compare") {
+			options.runComparison = true;
+		}
+	}
+
+	return options;
+}
+
+function buildDefaultPrompt(topic?: string): string {
+	if (topic) {
+		return (
+			`Assess how clear or likely ${topic} is in the near term from exactly 3 perspectives. ` +
+			"Call `ask_reviewer` 3 times with these personas:\n" +
+			"1. An escalation-risk analyst who focuses on signals that increase the chance of open conflict\n" +
+			"2. A cautious diplomatic analyst who focuses on deterrence, signaling, and off-ramps\n" +
+			"3. A market-impact analyst who only cares about what would have to happen before markets price in real escalation\n\n" +
+			"Each review should be 2-3 sentences. Focus on reasoning patterns and decision signals, not unverifiable claims. " +
+			'After collecting all 3, write a synthesis of how "clear" the trajectory really is.'
+		);
+	}
+
+	return (
+		"Assess how clear or likely a U.S.-Iran war is in the near term from exactly 3 perspectives. " +
+		"Call `ask_reviewer` 3 times with these personas:\n" +
+		"1. An escalation-risk analyst who focuses on signals that increase the chance of open conflict\n" +
+		"2. A cautious diplomatic analyst who focuses on deterrence, signaling, and off-ramps\n" +
+		"3. A market-impact analyst who only cares about what would have to happen before markets price in real escalation\n\n" +
+		"Each review should be 2-3 sentences. Focus on reasoning patterns and decision signals, not unverifiable claims. " +
+		'After collecting all 3, write a synthesis of how "clear" the trajectory really is.'
+	);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THE TOOL: ask_reviewer
@@ -64,7 +134,7 @@ const reviewerSchema = Type.Object({
 
 type ReviewerInput = Static<typeof reviewerSchema>;
 
-function createReviewerTool(): AgentTool<typeof reviewerSchema> {
+function createReviewerTool(subagentModelId: string): AgentTool<typeof reviewerSchema> {
 	return {
 		name: "ask_reviewer",
 		label: "Ask Reviewer",
@@ -87,7 +157,7 @@ function createReviewerTool(): AgentTool<typeof reviewerSchema> {
 			console.log(`📋 SUBAGENT CREATION DETAILS:`);
 			console.log(`   System Prompt: "${params.persona}"`);
 			console.log(`   Task: "${params.task}"`);
-			console.log(`   Model: ${LOCAL_MODEL_ID}`);
+			console.log(`   Model: ${subagentModelId}`);
 			console.log(`   Messages: [] (empty = isolated)`);
 			console.log(`${"─".repeat(60)}`);
 
@@ -97,7 +167,7 @@ function createReviewerTool(): AgentTool<typeof reviewerSchema> {
 			const subagent = new Agent({
 				initialState: {
 					systemPrompt: params.persona,  // ← DIFFERENT for each subagent!
-					model: localProxyModel,
+					model: createLocalProxyModel(subagentModelId),
 					thinkingLevel: "off",
 					tools: [],
 					messages: [],  // ← ALWAYS empty = fresh, isolated
@@ -140,11 +210,18 @@ function createReviewerTool(): AgentTool<typeof reviewerSchema> {
 // MAIN — the parent orchestrator
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function main() {
+async function runDemo(
+	label: string,
+	parentModelId: string,
+	subagentModelId: string,
+	userPrompt: string,
+): Promise<DemoRunSummary> {
 	console.log("═".repeat(60));
-	console.log(" 🎓 SUBAGENT PERSPECTIVES DEMO");
+	console.log(` 🎓 SUBAGENT PERSPECTIVES DEMO${label ? ` — ${label}` : ""}`);
 	console.log(" Why one agent can't do what three isolated subagents can");
 	console.log("═".repeat(60));
+	let finalSynthesis = "";
+	let toolCalls = 0;
 
 	const parentAgent = new Agent({
 		initialState: {
@@ -155,9 +232,9 @@ async function main() {
 				"When asked to review a product from multiple perspectives, you MUST call `ask_reviewer` " +
 				"separately for EACH perspective. Give each reviewer a very different persona in the `persona` field. " +
 				"After all reviews are collected, write a brief synthesis comparing the different perspectives.",
-			model: localProxyModel,
+			model: createLocalProxyModel(parentModelId),
 			thinkingLevel: "off",
-			tools: [createReviewerTool()],
+			tools: [createReviewerTool(subagentModelId)],
 			messages: [],
 		},
 		getApiKey: async () => LOCAL_API_KEY,
@@ -166,6 +243,9 @@ async function main() {
 	// Print system prompt for transparency
 	console.log(`\n📋 PARENT SYSTEM PROMPT:`);
 	console.log(`   "${parentAgent.state.systemPrompt?.substring(0, 200)}..."\n`);
+	console.log(`📋 MODEL SPLIT:`);
+	console.log(`   Parent model: ${parentModelId}`);
+	console.log(`   Subagent model: ${subagentModelId}\n`);
 
 	// Event logging
 	parentAgent.subscribe((event) => {
@@ -181,9 +261,13 @@ async function main() {
 						.filter((c: any) => c.type === "text")
 						.map((c: any) => c.text)
 						.join("");
-					if (nTools > 0) console.log(`   → LLM chose to call ${nTools} tool(s)`);
+				if (nTools > 0) {
+					toolCalls = nTools;
+					console.log(`   → LLM chose to call ${nTools} tool(s)`);
+				}
 					if (msg.stopReason === "error") console.log(`   ❌ Error: ${msg.errorMessage}`);
 					if (text.trim()) {
+					finalSynthesis = text;
 						console.log(`\n${"═".repeat(60)}`);
 						console.log(" 🤖 PARENT'S FINAL SYNTHESIS:");
 						console.log("═".repeat(60));
@@ -199,18 +283,46 @@ async function main() {
 		}
 	});
 
-	// THE TASK: Three isolated, contradicting perspectives
-	const userPrompt =
-		"Review the product 'iPhone 15 Pro Max' from exactly 3 perspectives. " +
-		"Call `ask_reviewer` 3 times with these personas:\n" +
-		"1. A die-hard Apple superfan who thinks everything Apple makes is perfect\n" +
-		"2. A harsh tech critic who is deeply skeptical of Apple and finds flaws in everything\n" +
-		"3. A budget-conscious parent who only cares about value for money\n\n" +
-		"Each review should be 2-3 sentences. After collecting all 3, write a synthesis.";
 
 	console.log(`👤 User: ${userPrompt}\n`);
 	await parentAgent.prompt(userPrompt);
 	console.log("\n✅ Done!");
+
+	return {
+		label,
+		parentModelId,
+		subagentModelId,
+		finalSynthesis,
+		toolCalls,
+	};
+}
+
+function printComparisonSummary(results: DemoRunSummary[]): void {
+	console.log(`\n${"═".repeat(60)}`);
+	console.log(" 📊 A/B SUMMARY");
+	console.log("═".repeat(60));
+	for (const result of results) {
+		const preview = result.finalSynthesis.replace(/\s+/g, " ").trim().slice(0, 180);
+		console.log(`- ${result.label}`);
+		console.log(`  parent=${result.parentModelId}, subagent=${result.subagentModelId}, toolCalls=${result.toolCalls}`);
+		console.log(`  synthesis=${preview}${result.finalSynthesis.length > 180 ? "..." : ""}`);
+	}
+	console.log("═".repeat(60));
+}
+
+async function main() {
+	const options = parseArgs(process.argv.slice(2));
+	const userPrompt = buildDefaultPrompt(options.topic);
+
+	if (options.runComparison) {
+		const baseline = await runDemo("baseline", BASELINE_PARENT_MODEL_ID, options.subagentModelId, userPrompt);
+		console.log("\n\n");
+		const improved = await runDemo("improved", options.parentModelId, options.subagentModelId, userPrompt);
+		printComparisonSummary([baseline, improved]);
+		return;
+	}
+
+	await runDemo("", options.parentModelId, options.subagentModelId, userPrompt);
 }
 
 main().catch((err) => {

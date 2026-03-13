@@ -1,0 +1,5 @@
+{
+  "lastChangelogVersion": "0.57.1",
+  "extensions": ["/Users/howard/pi-mono/packages/coding-agent/examples/extensions/custom-provider-local-cli"],
+  "defaultModel": "local-cli/standard"
+}
