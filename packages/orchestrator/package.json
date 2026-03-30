@@ -1,0 +1,29 @@
+{
+  "name": "@mariozechner/pi-orchestrator",
+  "version": "0.1.0",
+  "description": "Spec-driven autonomous dev workflow orchestrator",
+  "type": "module",
+  "bin": {
+    "orchestrate": "dist/orchestrate.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "build": "tsgo -p tsconfig.build.json",
+    "dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "^0.57.1",
+    "@mariozechner/pi-coding-agent": "^0.57.1",
+    "@mariozechner/pi-ai": "^0.57.1",
+    "yaml": "^2.8.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "shx": "^0.4.0",
+    "vitest": "^3.2.4"
+  }
+}
