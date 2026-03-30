@@ -119,26 +119,30 @@ ${contextChunks}
 ${gitLog}   ← previous attempts visible
 
 ## Local Completion Gate
-Before finishing, run: bun test && tsc --noEmit
-Only output <ready-for-review/> when ALL local checks pass.
-Do NOT stop until you can output this signal truthfully.
+Before finishing:
+1. Run `bun test && tsc --noEmit` — all checks must pass
+2. Run `git add -A && git commit -m "feat: [short description]"`
+Only output <ready-for-review/> AFTER committing AND all local checks pass.
+Do NOT output this signal until both conditions are true.
 
 ## Previous attempt failures (if any)
 ${attemptHistory}
 ```
 
-The agent runs its own fix → test → fix loop. The orchestrator waits for `<ready-for-review/>`. No polling needed.
+The agent runs its own fix → test → commit → fix loop. Before outputting `<ready-for-review/>` the agent must have committed all changes to the branch (the prompt explicitly requires a final `git commit`). The orchestrator listens to `AgentEvent` objects from `RpcClient.onEvent()`, scanning assistant `TextContent` blocks for the signal. No polling needed.
 
 ### Outer Loop — Autoresearch Pattern (orchestrator keeps/discards)
 
 ```
 for attempt 1..maxRetries:
   run inner loop → wait for <ready-for-review/>
-  gh pr create (or update)
+  // Agent has committed all changes before signaling
+  gh pr create --fill   (or gh pr edit if PR already exists from prior attempt)
+  // PR now exists with at least one commit — cloud CI can run
   gh pr checks --watch   ← cloud CI = "the metric"
 
   if CI passes:
-    run triple review
+    run four-reviewer review (Codex + Copilot + Gemini + Claude Sonnet)
     if no critical issues → notify Howard → DONE
     else → treat as failure, inject review issues
 
@@ -162,52 +166,69 @@ if all attempts exhausted:
 - Output: `ParsedSpec { feature, contextFiles, tasks[] }`
 - Validates with Zod, throws `SpecValidationError` with clear message on failure
 - Checks all `depends-on` references are valid task IDs
+- Checks all `context` file paths exist — if missing, throws at parse time (fail-fast)
+- Note: `ContextLoader` can therefore assume all paths are valid
 
 ### ContextLoader
-- Input: array of file paths
-- Output: concatenated markdown string, truncated to max tokens
+- Input: array of validated file paths
+- Output: concatenated markdown string, truncated to ~4k tokens each
 - Reads from the markdown vault directory
-- Graceful error if file missing (warns, continues without it)
+- No defensive file-existence check needed (SpecParser owns that)
 
 ### TaskRegistry
 - File: `.clawdbot/active-tasks.json`
 - Schema: `{ [taskId]: TaskRecord }`
-- Atomic writes (write to tmp, rename)
-- `getRunning()` — used to resume after crash
+- Atomic writes (write to `.tmp`, rename)
+- `getRunning()` — on orchestrator restart, tasks marked `running` are treated as failed attempts and re-entered into the outer loop at attempt N+1 (no RpcClient reconnect possible — each attempt spawns a fresh subprocess)
+
+### TaskScheduler
+- Reads `ParsedSpec.tasks`, builds dependency graph from `depends-on`
+- Runs independent tasks concurrently (hardcoded max 3 parallel tasks via semaphore)
+- Waits for a task's dependency to reach `status: done` before starting the dependent task
 
 ### WorktreeManager
-- `create(taskId, branch, baseBranch)` → creates worktree + branch, returns path
-- `remove(taskId)` → removes worktree
-- `reset(worktreePath, baseBranch)` → git reset for retry
+- `create(taskId, branch, baseBranch)` → `git worktree add -b branch path baseBranch`, returns path
+- `remove(taskId)` → `git worktree remove path`
+- `create()` captures and stores the resolved base commit SHA at creation time: `git rev-parse baseBranch` → stored in `TaskRecord.baseCommitSha`
+- `reset(worktreePath, baseCommitSha)` → `git reset --hard <baseCommitSha>` + `git push --force-with-lease` — discards all commits the agent made, restoring the branch to exactly the state when the worktree was created, regardless of any subsequent advancement of the base branch. Each retry starts from a clean branch.
 
 ### AgentRunner
-- Wraps `RpcClient` from `@mariozechner/pi-coding-agent`
-- `run(worktreePath, prompt, model, timeout)` → waits for `<ready-for-review/>` in output
-- Captures all events for logging
-- Returns `AgentResult { summary, gitLog, prDescription }`
+- Constructs a **new `RpcClient` per attempt** — `cwd` is set at construction time (`RpcClientOptions.cwd = worktreePath`), not per-call
+- Lifecycle per attempt: `client.start()` → `client.prompt(prompt)` → listen to events → `client.stop()`
+- **Completion detection:** listens to `AgentEvent` stream; on `message_end` events where `message.role === "assistant"`, scans `content` array for `TextContent` blocks containing `<ready-for-review/>`. Resolves the run promise when found. Falls back to timeout (30min) if signal never appears.
+- Agent is expected to have committed all changes before outputting `<ready-for-review/>`. The inner loop prompt explicitly instructs this (see Section 5).
+- Returns `AgentResult { summary, gitLog, lastCommitSha }`
 
 ### CIRunner
-- `runLocal(worktreePath)` → `bun test && tsc --noEmit`
+- `runLocal(worktreePath)` → `bun test && tsc --noEmit` in the worktree directory
 - `runCloud(branch)` → `gh pr checks --watch --interval 30`
 - Returns `CIResult { passed, failedChecks, runId, errorOutput }`
+- PR must exist before `runCloud` is called — `CIRunner` does not create PRs
 
 ### FailureExtractor
-- Uses `claude-haiku-4-5` (cheap + fast)
+- Uses a small/fast model (resolve via `getAvailableModels()` at startup — use whatever the current haiku-tier model ID is; do not hardcode)
 - Input: CI error output (truncated to 3k tokens)
 - Output: `{ summary: string, failedTests: string[], approach: string }`
 - Used to build the next attempt's `attemptHistory` injection
 
 ### ReviewOrchestrator
-- Spawns 4 `RpcClient` instances in `Promise.all()`
+- Spawns 4 `RpcClient` instances in `Promise.all()` — no worktree needed (read-only review)
 - Codex: edge cases, race conditions, logic errors
-- Copilot: GitHub-native context, repo conventions
-- Gemini: security, accessibility, free tier
-- Claude Sonnet: validation, flags critical issues only
-- Each agent posts review comments via `gh pr review` tool call
+- Copilot: GitHub-native context, repo conventions (requires GitHub OAuth token via `getApiKey` callback — read from `GITHUB_TOKEN` env var)
+- Gemini: security, accessibility (requires `GEMINI_API_KEY` env var)
+- Claude Sonnet: validation, flags critical issues only (requires `ANTHROPIC_API_KEY` env var)
+- Each agent posts review comments directly via `gh pr review` tool call
 - Returns `ReviewResult { passed, criticalIssues[] }`
 
+### PromptBuilder
+- `build(task, contextChunks, attemptHistory, gitLog)` → `string`
+- Constructs the inner-loop prompt with: task description, context chunks, git history on the branch, previous attempt failures, and explicit local completion gate instructions
+- The `attemptHistory` injection is where the autoresearch intelligence lives — structured failure context from `FailureExtractor` tells the agent exactly what went wrong and why a different approach is needed
+- On attempt 1: `attemptHistory` is empty
+- On attempt N: injects all prior `FailureExtractor` outputs as labeled sections
+
 ### Notifier
-- Telegram Bot API
+- Telegram Bot API (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` env vars)
 - `notifyReady(taskId, prNumber, prUrl)` — PR ready to merge
 - `notifyFailed(taskId, attempts, lastError)` — needs human attention
 
@@ -232,14 +253,26 @@ if all attempts exhausted:
 ## 8. Task Registry Schema
 
 ```typescript
+interface DefinitionOfDone {
+  prCreated: boolean;
+  localCIPassed: boolean;
+  cloudCIPassed: boolean;
+  codexReviewPassed: boolean;
+  copilotReviewPassed: boolean;
+  geminiReviewPassed: boolean;
+  claudeReviewPassed: boolean;
+  screenshotsIncluded: boolean; // only checked if task.requiresScreenshots === true
+}
+
 interface TaskRecord {
   id: string;
   branch: string;
   worktree: string;
+  baseCommitSha: string;         // captured at worktree creation; used for clean resets
   status: "pending" | "running" | "done" | "failed" | "waiting_review";
   attempts: number;
   maxRetries: number;
-  attemptHistory: string[];      // failure context per attempt
+  attemptHistory: string[];      // FailureExtractor output per failed attempt
   pr?: number;
   prUrl?: string;
   checks?: DefinitionOfDone;
@@ -277,7 +310,7 @@ src/
 | Scenario | Behavior |
 |---|---|
 | Spec validation fails | Throw `SpecValidationError`, exit 1, no agents spawned |
-| Context file missing | Warn + continue without that file |
+| Context file missing | `SpecParser` throws `SpecValidationError`, exit 1 — fail-fast before any agent spawns |
 | Agent timeout (>30min) | Kill agent, treat as CI failure, extract from timeout message |
 | Worktree creation fails | Abort task, mark failed, continue other tasks |
 | GitHub CLI not authenticated | Fail fast at startup, not mid-run |
