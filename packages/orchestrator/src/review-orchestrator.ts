@@ -89,8 +89,8 @@ ${diff}`,
       const text = await client.getLastAssistantText();
       const criticals = (text ?? "")
         .split("\n")
-        .filter((l) => l.startsWith("CRITICAL:"))
-        .map((l) => `[${reviewer.name}] ${l}`);
+        .filter((l: string) => l.startsWith("CRITICAL:"))
+        .map((l: string) => `[${reviewer.name}] ${l}`);
 
       return criticals;
     } finally {

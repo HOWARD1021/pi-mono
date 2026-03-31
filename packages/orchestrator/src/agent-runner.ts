@@ -45,7 +45,7 @@ export class AgentRunner {
               completed = true;
               clearTimeout(timer);
               unsubscribe?.();
-              client.getLastAssistantText().then((summary) => {
+              client.getLastAssistantText().then((summary: string | null) => {
                 const sha = this.getHeadSha();
                 resolve({ summary, lastCommitSha: sha });
               });
