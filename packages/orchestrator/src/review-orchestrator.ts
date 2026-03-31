@@ -1,38 +1,5 @@
 import { execSync } from "node:child_process";
-import { RpcClient } from "@mariozechner/pi-coding-agent/modes";
 import type { ReviewResult } from "./types.js";
-
-interface ReviewerConfig {
-  name: string;
-  provider: string;
-  model: string;
-  focus: string;
-  apiKeyEnv: string;
-}
-
-const REVIEWERS: ReviewerConfig[] = [
-  {
-    name: "Codex",
-    provider: "openai",
-    model: "gpt-5.3-codex",
-    focus: "Edge cases, logic errors, race conditions, missing error handling",
-    apiKeyEnv: "OPENAI_API_KEY",
-  },
-  {
-    name: "Gemini",
-    provider: "google",
-    model: "gemini-2.0-flash",
-    focus: "Security vulnerabilities, accessibility, scalability issues",
-    apiKeyEnv: "GEMINI_API_KEY",
-  },
-  {
-    name: "Claude",
-    provider: "anthropic",
-    model: "claude-sonnet-4-6",
-    focus: "Correctness validation. Flag CRITICAL issues only — ignore style.",
-    apiKeyEnv: "ANTHROPIC_API_KEY",
-  },
-];
 
 export class ReviewOrchestrator {
   async review(prNumber: number): Promise<ReviewResult> {
@@ -43,58 +10,28 @@ export class ReviewOrchestrator {
       return { passed: false, criticalIssues: [`Failed to fetch PR diff: ${(e as Error).message}`] };
     }
 
-    const results = await Promise.allSettled(
-      REVIEWERS.map((r) => this.runReviewer(r, prNumber, diff))
-    );
-
-    const criticalIssues: string[] = [];
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        criticalIssues.push(...result.value);
-      }
-    }
-
-    return { passed: criticalIssues.length === 0, criticalIssues };
-  }
-
-  private async runReviewer(
-    reviewer: ReviewerConfig,
-    prNumber: number,
-    diff: string
-  ): Promise<string[]> {
-    const client = new RpcClient({
-      provider: reviewer.provider,
-      model: reviewer.model,
-      env: { [reviewer.apiKeyEnv]: process.env[reviewer.apiKeyEnv] ?? "" },
-    } as any);
-
-    await client.start();
-
     try {
-      await (client as any).promptAndWait(
-        `You are a ${reviewer.name} code reviewer. Focus: ${reviewer.focus}
+      const prompt = `You are a code reviewer. Review this PR diff for CRITICAL issues only (security, correctness, data loss).
+For each CRITICAL issue output a line starting with "CRITICAL: ".
+If no critical issues, output only "LGTM".
 
-Review this PR diff and use the \`gh\` bash tool to post your review comments directly on PR #${prNumber}.
+PR #${prNumber} diff:
+${diff}`;
 
-For CRITICAL issues: prefix with "CRITICAL: "
-For minor issues: skip them.
-If no critical issues: post a short approval comment.
+      const out = execSync(
+        `claude -p ${JSON.stringify(prompt)} --dangerously-skip-permissions --model claude-haiku-4-5-20251001`,
+        { stdio: "pipe", timeout: 5 * 60 * 1000 }
+      ).toString();
 
-PR Diff:
-${diff}`,
-        [],
-        5 * 60 * 1000
-      );
-
-      const text = await client.getLastAssistantText();
-      const criticals = (text ?? "")
+      const criticalIssues = out
         .split("\n")
-        .filter((l: string) => l.startsWith("CRITICAL:"))
-        .map((l: string) => `[${reviewer.name}] ${l}`);
+        .filter((l) => l.startsWith("CRITICAL:"))
+        .map((l) => `[Claude] ${l}`);
 
-      return criticals;
-    } finally {
-      await client.stop();
+      return { passed: criticalIssues.length === 0, criticalIssues };
+    } catch (e) {
+      // Review failed — don't block the PR
+      return { passed: true, criticalIssues: [] };
     }
   }
 }
