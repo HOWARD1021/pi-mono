@@ -1,51 +1,55 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import { describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
 
-vi.mock("@mariozechner/pi-coding-agent/modes", () => {
-  const mockClient = {
-    start: vi.fn().mockResolvedValue(undefined),
-    stop: vi.fn().mockResolvedValue(undefined),
-    prompt: vi.fn().mockResolvedValue(undefined),
-    waitForIdle: vi.fn().mockResolvedValue(undefined),
-    getLastAssistantText: vi.fn().mockResolvedValue("Task complete"),
-    onEvent: vi.fn(),
-  };
-  return {
-    RpcClient: vi.fn(() => mockClient),
-    _mockClient: mockClient,
-  };
-});
+// Mock child_process before importing module under test
+vi.mock("node:child_process", () => ({
+  spawn: vi.fn(),
+  execSync: vi.fn().mockReturnValue(Buffer.from("abc1234\n")),
+}));
 
+import { spawn } from "node:child_process";
 import { AgentRunner } from "../src/agent-runner.js";
 
+function makeProc(stdoutLines: string[], exitCode = 0) {
+  const stdout = new EventEmitter();
+  const proc = new EventEmitter() as any;
+  proc.stdout = stdout;
+  proc.kill = vi.fn();
+
+  // Emit stdout lines async, then close
+  setTimeout(() => {
+    for (const line of stdoutLines) {
+      stdout.emit("data", Buffer.from(line));
+    }
+    proc.emit("close", exitCode);
+  }, 10);
+
+  return proc;
+}
+
 describe("AgentRunner", () => {
-  it("resolves when <ready-for-review/> is detected in event stream", async () => {
-    const { RpcClient, _mockClient } = await import("@mariozechner/pi-coding-agent/modes");
+  it("resolves when <ready-for-review/> appears in stdout", async () => {
+    vi.mocked(spawn).mockReturnValue(
+      makeProc(["Working on it...\n", "All done. <ready-for-review/>\n"]) as any
+    );
 
-    _mockClient.onEvent.mockImplementation((cb: (e: AgentEvent) => void) => {
-      setTimeout(() => {
-        cb({
-          type: "message_end",
-          message: {
-            role: "assistant",
-            content: [{ type: "text", text: "Work done. <ready-for-review/>" }],
-          },
-        } as unknown as AgentEvent);
-      }, 10);
-      return () => {};
-    });
+    const runner = new AgentRunner("/wt/task-1");
+    const result = await runner.run("Do the work", "claude-opus-4-6", 5000);
 
-    const runner = new AgentRunner("/path/to/worktree");
-    const result = await runner.run("Do some work", "claude-opus-4-6", 5000);
-    expect(result.summary).toBe("Task complete");
+    expect(result.lastCommitSha).toBe("abc1234");
+    expect(spawn).toHaveBeenCalledWith(
+      "claude",
+      expect.arrayContaining(["-p", "Do the work"]),
+      expect.objectContaining({ cwd: "/wt/task-1" })
+    );
   });
 
-  it("rejects on timeout without completion signal", async () => {
-    const { RpcClient, _mockClient } = await import("@mariozechner/pi-coding-agent/modes");
+  it("rejects on timeout when signal never appears", async () => {
+    vi.mocked(spawn).mockReturnValue(makeProc([]) as any); // exits with no signal
 
-    _mockClient.onEvent.mockImplementation(() => () => {});  // never emits
-
-    const runner = new AgentRunner("/path/to/worktree");
-    await expect(runner.run("Do some work", "claude-opus-4-6", 100)).rejects.toThrow(/timed out/i);
+    const runner = new AgentRunner("/wt/task-1");
+    await expect(
+      runner.run("Do the work", "claude-opus-4-6", 50)
+    ).rejects.toThrow(/timeout|ready-for-review/i);
   });
 });
