@@ -8,7 +8,7 @@ export class AgentRunner {
 
   run(prompt: string, model: string, timeoutMs = 30 * 60 * 1000): Promise<AgentResult> {
     return new Promise((resolve, reject) => {
-      const proc = spawn("claude", ["-p", prompt, "--model", model], {
+      const proc = spawn("claude", ["-p", prompt, "--model", model, "--dangerously-skip-permissions"], {
         cwd: this.worktreePath,
         stdio: ["ignore", "pipe", "pipe"],
       });
