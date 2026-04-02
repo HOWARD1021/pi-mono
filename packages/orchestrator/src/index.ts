@@ -85,7 +85,7 @@ export async function runTaskWithRetry(
 
 			console.log(`[${task.id}] Spawning claude agent...`);
 			const agentRunner = new AgentRunner(wt.path);
-			const agentResult = await agentRunner.run(prompt, task.model);
+			const agentResult = await agentRunner.run(prompt, task.model, undefined, wt.baseCommitSha);
 			console.log(`[${task.id}] Agent done — commit: ${agentResult.lastCommitSha}`);
 
 			const prNumber = await createOrUpdatePR(wt.path, branch, task.title, attempt);
