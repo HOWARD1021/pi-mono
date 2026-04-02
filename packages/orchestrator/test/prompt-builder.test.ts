@@ -26,7 +26,7 @@ describe("PromptBuilder", () => {
   it("includes completion gate instructions", () => {
     const p = buildPrompt(task, "", [], "");
     expect(p).toContain("<ready-for-review/>");
-    expect(p).toContain("bun test");
+    expect(p).toContain("bun run test");
     expect(p).toContain("git commit");
   });
 

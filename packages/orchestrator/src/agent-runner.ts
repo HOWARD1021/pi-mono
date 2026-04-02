@@ -22,8 +22,13 @@ export class AgentRunner {
         }
       }, timeoutMs);
 
+      let fullOutput = "";
+
       proc.stdout.on("data", (chunk: Buffer) => {
-        if (!completed && chunk.toString().includes(COMPLETION_SIGNAL)) {
+        const text = chunk.toString();
+        fullOutput += text;
+        process.stdout.write(`[agent] ${text}`);
+        if (!completed && text.includes(COMPLETION_SIGNAL)) {
           completed = true;
           clearTimeout(timer);
           proc.kill();
@@ -34,10 +39,14 @@ export class AgentRunner {
         }
       });
 
+      proc.stderr.on("data", (chunk: Buffer) => {
+        process.stderr.write(`[agent-err] ${chunk.toString()}`);
+      });
+
       proc.on("close", (code) => {
         clearTimeout(timer);
         if (!completed) {
-          reject(new Error(`Agent exited (code ${code}) without outputting <ready-for-review/>`));
+          reject(new Error(`Agent exited (code ${code}) without outputting <ready-for-review/>. Last output:\n${fullOutput.slice(-500)}`));
         }
       });
     });

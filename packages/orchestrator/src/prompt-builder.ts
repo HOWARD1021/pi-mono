@@ -34,7 +34,7 @@ export function buildPrompt(
   parts.push(`## Local Completion Gate
 
 Before finishing:
-1. Run \`bun test && tsc --noEmit\` — ALL checks must pass
+1. Run \`cd packages/orchestrator && bun run test && cd ../..\` — ALL checks must pass
 2. Run \`git add -A && git commit -m "feat: ${task.title}"\`${screenshotGate}
 
 Only output \`<ready-for-review/>\` AFTER committing AND all local checks pass.

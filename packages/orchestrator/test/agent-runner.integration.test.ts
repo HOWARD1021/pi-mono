@@ -12,8 +12,10 @@ import { AgentRunner } from "../src/agent-runner.js";
 
 function makeProc(stdoutLines: string[], exitCode = 0) {
   const stdout = new EventEmitter();
+  const stderr = new EventEmitter();
   const proc = new EventEmitter() as any;
   proc.stdout = stdout;
+  proc.stderr = stderr;
   proc.kill = vi.fn();
 
   // Emit stdout lines async, then close

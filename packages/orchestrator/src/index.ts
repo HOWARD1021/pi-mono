@@ -25,8 +25,10 @@ export async function orchestrate(specPath: string): Promise<void> {
   const scheduler = new TaskScheduler(3);
   const notifier = new Notifier();
 
+  const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", { stdio: "pipe" }).toString().trim();
+
   await scheduler.run(spec.tasks, async (task) => {
-    const result = await runTaskWithRetry(task, spec.contextFiles, "main", registry);
+    const result = await runTaskWithRetry(task, spec.contextFiles, currentBranch, registry);
     if (result.success) {
       await notifier.notifyReady(task.id, result.prNumber!, result.prUrl!);
     } else {
@@ -41,7 +43,7 @@ export async function runTaskWithRetry(
   baseBranch: string,
   registry?: TaskRegistry
 ): Promise<TaskRunResult> {
-  const repoRoot = process.cwd();
+  const repoRoot = execSync("git rev-parse --show-toplevel", { stdio: "pipe" }).toString().trim();
   const worktreeManager = new WorktreeManager(repoRoot);
   const ciRunner = new CIRunner();
   const failureExtractor = new FailureExtractor();
@@ -79,11 +81,14 @@ export async function runTaskWithRetry(
 
       const prompt = buildPrompt(task, contextChunks, attemptHistory, gitLog);
 
+      console.log(`[${task.id}] Spawning claude agent...`);
       const agentRunner = new AgentRunner(wt.path);
-      await agentRunner.run(prompt, task.model);
+      const agentResult = await agentRunner.run(prompt, task.model);
+      console.log(`[${task.id}] Agent done — commit: ${agentResult.lastCommitSha}`);
 
       const prNumber = await createOrUpdatePR(wt.path, branch, task.title, attempt);
 
+      console.log(`[${task.id}] Running local CI...`);
       const localCI = ciRunner.runLocal(wt.path);
       if (!localCI.passed) {
         const failure = await failureExtractor.extract(localCI.errorOutput);
@@ -95,6 +100,7 @@ export async function runTaskWithRetry(
         continue;
       }
 
+      console.log(`[${task.id}] Running cloud CI on PR #${prNumber}...`);
       const cloudCI = await ciRunner.runCloud(branch);
       if (!cloudCI.passed) {
         const ciLogs = await fetchCILogs(prNumber);
@@ -153,10 +159,12 @@ async function createOrUpdatePR(
   title: string,
   attempt: number
 ): Promise<number> {
-  const opts = { cwd: worktreePath, stdio: "pipe" as const };
+  const opts = { cwd: worktreePath, stdio: "pipe" as const, timeout: 30_000 };
 
   if (attempt === 1) {
+    console.log(`[PR] Pushing branch ${branch}...`);
     execSync(`git push -u origin ${branch}`, opts);
+    console.log(`[PR] Creating PR...`);
     const out = execSync(`gh pr create --title "${title}" --body "Automated by Pi Orchestrator" --fill`, opts);
     const match = out.toString().match(/\/pull\/(\d+)/);
     return parseInt(match?.[1] ?? "0", 10);
