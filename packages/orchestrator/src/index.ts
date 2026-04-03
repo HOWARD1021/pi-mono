@@ -9,7 +9,7 @@ import { ReviewOrchestrator } from "./review-orchestrator.js";
 import { parseSpec } from "./spec-parser.js";
 import { TaskRegistry } from "./task-registry.js";
 import { TaskScheduler } from "./task-scheduler.js";
-import type { ParsedSpec, ParsedTask, TaskRunResult } from "./types.js";
+import type { ParsedTask, TaskRunResult } from "./types.js";
 import { WorktreeManager } from "./worktree-manager.js";
 
 export { parseSpec };
@@ -93,9 +93,9 @@ export async function runTaskWithRetry(
 			console.log(`[${task.id}] Running local CI...`);
 			const localCI = ciRunner.runLocal(wt.path);
 			if (!localCI.passed) {
-				const failure = await failureExtractor.extract(localCI.errorOutput);
+				const failure = await failureExtractor.extract(localCI.errorOutput, wt.path);
 				attemptHistory.push(
-					`Attempt ${attempt} (local CI failed):\n${failure.summary}\nFailed: ${failure.failedTests.join(", ")}`,
+					`Attempt ${attempt} (local CI failed):\nApproach tried: ${failure.approach}\nRoot cause: ${failure.summary}\nFailed tests: ${failure.failedTests.join(", ")}`,
 				);
 				await reg.update(task.id, { attemptHistory });
 				worktreeManager.reset(wt.path, wt.baseCommitSha);
@@ -106,9 +106,9 @@ export async function runTaskWithRetry(
 			const cloudCI = await ciRunner.runCloud(branch);
 			if (!cloudCI.passed) {
 				const ciLogs = await fetchCILogs(prNumber);
-				const failure = await failureExtractor.extract(ciLogs || cloudCI.errorOutput);
+				const failure = await failureExtractor.extract(ciLogs || cloudCI.errorOutput, wt.path);
 				attemptHistory.push(
-					`Attempt ${attempt} (cloud CI failed):\n${failure.summary}\nFailed checks: ${cloudCI.failedChecks.join(", ")}`,
+					`Attempt ${attempt} (cloud CI failed):\nApproach tried: ${failure.approach}\nRoot cause: ${failure.summary}\nFailed checks: ${cloudCI.failedChecks.join(", ")}`,
 				);
 				await reg.update(task.id, { attemptHistory });
 				worktreeManager.reset(wt.path, wt.baseCommitSha);
@@ -181,7 +181,7 @@ function getPRUrl(prNumber: number): string {
 	}
 }
 
-async function fetchCILogs(prNumber: number): Promise<string> {
+async function fetchCILogs(_prNumber: number): Promise<string> {
 	try {
 		return execSync(`gh run list --json databaseId --limit 1 | gh run view --log-failed`, {
 			stdio: "pipe",

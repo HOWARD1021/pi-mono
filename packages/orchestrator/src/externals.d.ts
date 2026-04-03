@@ -21,13 +21,3 @@ declare module "@mariozechner/pi-coding-agent/modes" {
 		onEvent(listener: (event: AgentEvent) => void): () => void;
 	}
 }
-
-declare module "@mariozechner/pi-agent-core" {
-	export interface AgentEvent {
-		type: string;
-		message?: {
-			role: string;
-			content: Array<{ type: string; text?: string }>;
-		};
-	}
-}

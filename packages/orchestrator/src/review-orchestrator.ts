@@ -29,7 +29,7 @@ ${diff}`;
 				.map((l) => `[Claude] ${l}`);
 
 			return { passed: criticalIssues.length === 0, criticalIssues };
-		} catch (e) {
+		} catch {
 			// Review failed — don't block the PR
 			return { passed: true, criticalIssues: [] };
 		}

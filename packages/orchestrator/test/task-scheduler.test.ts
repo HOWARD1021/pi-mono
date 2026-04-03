@@ -39,7 +39,7 @@ describe("TaskScheduler", () => {
 			completedAt[task.id] = Date.now();
 		});
 
-		expect(completedAt["a"]).toBeLessThan(completedAt["b"]);
+		expect(completedAt.a).toBeLessThan(completedAt.b);
 	});
 
 	it("respects max concurrency", async () => {

@@ -23,7 +23,7 @@ export class CIRunner {
 		return { passed: true, failedChecks: [], errorOutput: "" };
 	}
 
-	async runCloud(branch: string): Promise<CIResult> {
+	async runCloud(_branch: string): Promise<CIResult> {
 		try {
 			const raw = execSync(`gh pr checks --json name,state --watch --interval 30`, {
 				stdio: "pipe",

@@ -67,16 +67,18 @@ describe("runTaskWithRetry", () => {
 	it("passes baseSha (wt.baseCommitSha) to agentRunner.run() (Gap A)", async () => {
 		const { AgentRunner } = await import("../src/agent-runner.js");
 		const runSpy = vi.fn().mockResolvedValue({ summary: "done", lastCommitSha: "abc1234" });
-		vi.mocked(AgentRunner).mockImplementationOnce(() => ({ run: runSpy }));
+		vi.mocked(AgentRunner).mockImplementationOnce(
+			() => ({ run: runSpy, worktreePath: "", getHeadSha: vi.fn() }) as unknown as InstanceType<typeof AgentRunner>,
+		);
 
 		await runTaskWithRetry(mockTask, [], "main");
 
 		// wt.baseCommitSha is "base123" (from WorktreeManager mock above)
 		expect(runSpy).toHaveBeenCalledWith(
-			expect.any(String),   // prompt
-			expect.any(String),   // model
-			undefined,            // timeoutMs (default)
-			"base123",            // baseSha ← this is what Gap A wires in
+			expect.any(String), // prompt
+			expect.any(String), // model
+			undefined, // timeoutMs (default)
+			"base123", // baseSha ← this is what Gap A wires in
 		);
 	});
 });

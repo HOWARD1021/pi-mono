@@ -14,7 +14,9 @@ export function buildPrompt(task: ParsedTask, contextChunks: string, attemptHist
 	}
 
 	if (attemptHistory.length > 0) {
-		const historyText = attemptHistory.map((h, i) => `### Attempt ${i + 1}\n${h}`).join("\n\n");
+		const historyText = attemptHistory
+			.map((h, i) => `### Attempt ${i + 1}\n${h}\n⚠️ Do NOT repeat this approach.`)
+			.join("\n\n");
 		parts.push(
 			`## IMPORTANT: Previous Attempts Failed\n\n${historyText}\n\nYou MUST try a **different approach** than what was attempted before. Study the failure reasons carefully and change your implementation strategy.`,
 		);

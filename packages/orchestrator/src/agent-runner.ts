@@ -6,7 +6,7 @@ const COMPLETION_SIGNAL = "<ready-for-review/>";
 export class AgentRunner {
 	constructor(private readonly worktreePath: string) {}
 
-	run(prompt: string, model: string, timeoutMs = 30 * 60 * 1000): Promise<AgentResult> {
+	run(prompt: string, model: string, timeoutMs = 30 * 60 * 1000, baseSha?: string): Promise<AgentResult> {
 		return new Promise((resolve, reject) => {
 			const proc = spawn("claude", ["-p", prompt, "--model", model, "--dangerously-skip-permissions"], {
 				cwd: this.worktreePath,
@@ -32,9 +32,14 @@ export class AgentRunner {
 					completed = true;
 					clearTimeout(timer);
 					proc.kill();
+					const newSha = this.getHeadSha();
+					if (baseSha !== undefined && newSha === baseSha) {
+						reject(new Error("Agent output <ready-for-review/> but made no commit"));
+						return;
+					}
 					resolve({
 						summary: null,
-						lastCommitSha: this.getHeadSha(),
+						lastCommitSha: newSha,
 					});
 				}
 			});

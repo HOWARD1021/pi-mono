@@ -36,6 +36,17 @@ describe("PromptBuilder", () => {
 		expect(p).toContain("Previous Attempts");
 		expect(p).toContain("TypeError");
 		expect(p).toContain("different approach");
+		expect(p).toContain("Do NOT repeat this approach");
+	});
+
+	it("includes approach-aware failure context in retry prompt", () => {
+		const history = [
+			"Attempt 1 (local CI failed):\nApproach tried: direct string replace\nRoot cause: off-by-one error\nFailed tests: test-foo",
+		];
+		const p = buildPrompt(task, "", history, "");
+		expect(p).toContain("Approach tried: direct string replace");
+		expect(p).toContain("Root cause: off-by-one error");
+		expect(p).toContain("Do NOT repeat this approach");
 	});
 
 	it("includes git log when provided", () => {
