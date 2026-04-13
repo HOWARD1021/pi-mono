@@ -1,0 +1,111 @@
+{
+  "task-hello-copilot": {
+    "id": "task-hello-copilot",
+    "branch": "agent/task-hello-copilot-1775307274575",
+    "worktree": "/Users/howard/learn-claude-agents/.worktrees/task-hello-copilot",
+    "baseCommitSha": "908ee8f22931173478dc5f06585ed36c078897e4",
+    "status": "done",
+    "attempts": 1,
+    "maxRetries": 2,
+    "attemptHistory": [],
+    "startedAt": 1775307274937,
+    "model": "gpt-5-mini",
+    "pr": 7,
+    "prUrl": "https://github.com/HOWARD1021/pi-mono/pull/7",
+    "completedAt": 1775307490583
+  },
+  "task-build-core": {
+    "id": "task-build-core",
+    "branch": "agent/task-build-core-1775411177908",
+    "worktree": "/Users/howard/learn-claude-agents/.worktrees/task-build-core",
+    "baseCommitSha": "908ee8f22931173478dc5f06585ed36c078897e4",
+    "status": "done",
+    "attempts": 1,
+    "maxRetries": 2,
+    "attemptHistory": [],
+    "startedAt": 1775411178233,
+    "model": "gpt-5-mini",
+    "pr": 11,
+    "prUrl": "https://github.com/HOWARD1021/pi-mono/pull/11",
+    "completedAt": 1775411642731
+  },
+  "task-intentional-failure": {
+    "id": "task-intentional-failure",
+    "branch": "agent/task-intentional-failure-1775410308150",
+    "worktree": "/Users/howard/learn-claude-agents/.worktrees/task-intentional-failure",
+    "baseCommitSha": "908ee8f22931173478dc5f06585ed36c078897e4",
+    "status": "done",
+    "attempts": 1,
+    "maxRetries": 3,
+    "attemptHistory": [],
+    "startedAt": 1775410308446,
+    "model": "gpt-5-mini",
+    "pr": 8,
+    "prUrl": "https://github.com/HOWARD1021/pi-mono/pull/8",
+    "completedAt": 1775410487854
+  },
+  "task-create-math-lib": {
+    "id": "task-create-math-lib",
+    "branch": "agent/task-create-math-lib-1775410308470",
+    "worktree": "/Users/howard/learn-claude-agents/.worktrees/task-create-math-lib",
+    "baseCommitSha": "908ee8f22931173478dc5f06585ed36c078897e4",
+    "status": "done",
+    "attempts": 1,
+    "maxRetries": 1,
+    "attemptHistory": [],
+    "startedAt": 1775410308705,
+    "model": "gpt-5-mini",
+    "pr": 9,
+    "prUrl": "https://github.com/HOWARD1021/pi-mono/pull/9",
+    "completedAt": 1775410581611
+  },
+  "task-create-cli-consumer": {
+    "id": "task-create-cli-consumer",
+    "branch": "agent/task-create-cli-consumer-1775410581635",
+    "worktree": "/Users/howard/learn-claude-agents/.worktrees/task-create-cli-consumer",
+    "baseCommitSha": "908ee8f22931173478dc5f06585ed36c078897e4",
+    "status": "failed",
+    "attempts": 1,
+    "maxRetries": 1,
+    "attemptHistory": [
+      "Attempt 1 (review failed):\nCritical issues:\n[Claude] CRITICAL: Code uses non-null assertions (`!`) on optional methods of dynamically imported module without validation. If `./math.js` doesn't export all required methods (add, sub, mul, div), calling them will crash with \"Cannot read property of undefined\" at runtime.\n[Copilot] CRITICAL: `compute()` has no `default` case in the switch — an invalid `op` silently returns `undefined` despite the `Promise<number>` return type. Any caller relying on the numeric result will get `undefined` with no error thrown.\n[Copilot] CRITICAL: Division by zero is silently swallowed — `div: (x,y) => x / y` returns `Infinity` (or `NaN` for `0/0`) without any error. Callers receive a non-finite number with no indication of failure, risking silent data corruption downstream.\n[Copilot] CRITICAL: `await import(\"./math.js\")` loads and executes an arbitrary file from the working directory. If an attacker can place a malicious `math.js` alongside the binary (e.g., in a writable deploy dir), this is remote code execution. The project rules also explicitly prohibit inline dynamic imports.\n[Codex] CRITICAL: `packages/orchestrator/src/math-cli.ts:31` contains a raw newline inside a double-quoted string literal (`console.error(\"Usage: ... <b>` on one line, `ops: ...\")` on the next), which is a syntax error in TS/JS and prevents the file from compiling or running at all.",
+      "Attempt 1 (error): ENOENT: no such file or directory, posix_spawn '/bin/sh'"
+    ],
+    "startedAt": 1775410581911,
+    "model": "gpt-5-mini",
+    "completedAt": 1775411253150
+  },
+  "task-write-tests": {
+    "id": "task-write-tests",
+    "branch": "agent/task-write-tests-1775411642756",
+    "worktree": "/Users/howard/learn-claude-agents/.worktrees/task-write-tests",
+    "baseCommitSha": "908ee8f22931173478dc5f06585ed36c078897e4",
+    "status": "failed",
+    "attempts": 2,
+    "maxRetries": 2,
+    "attemptHistory": [
+      "Attempt 1 (review failed):\nCritical issues:\n[Gemini] CRITICAL: The `wordFreq` function uses a plain object (`{}`) as a map for word counts. If the input text contains words that match `Object.prototype` properties (e.g., \"constructor\", \"toString\", \"hasOwnProperty\"), the function will return incorrect values (strings instead of numbers) because `counts[t]` will initially retrieve the prototype's function instead of `undefined`. This should be fixed by using `Object.create(null)` or a `Map`.",
+      "Attempt 2 (cloud CI failed):\nApproach tried: Agent attempted to write and commit a word frequency library with tests (modified word-freq.ts and word-freq.test.ts), but the remote sync step in the git workflow was incomplete or failed.\nRoot cause: The PR branch was created but commits were never pushed to the remote repository. The agent created local commits modifying word-freq.ts and its test file, but the git push operation either failed or was not executed before attempting to check PR status via GitHub CLI.\nFailed checks: gh pr checks"
+    ],
+    "startedAt": 1775411643026,
+    "model": "gpt-5-mini",
+    "completedAt": 1775412459653
+  },
+  "task-optimize": {
+    "id": "task-optimize",
+    "branch": "agent/task-optimize-1775412459776",
+    "worktree": "/Users/howard/learn-claude-agents/.worktrees/task-optimize",
+    "baseCommitSha": "908ee8f22931173478dc5f06585ed36c078897e4",
+    "status": "failed",
+    "attempts": 3,
+    "maxRetries": 3,
+    "attemptHistory": [
+      "Attempt 1 (review failed):\nCritical issues:\n[Claude] CRITICAL: Missing URL argument in fetch call at packages/agent/src/proxy.ts line ~121: `await fetch(, {` — this is a syntax error that will fail to compile\n[Claude] CRITICAL: Incomplete variable assignment at packages/agent/src/proxy.ts line ~139: `let errorMessage = ;` — missing the right-hand side value\n[Claude] CRITICAL: Incomplete variable assignment at packages/orchestrator/src/eval-loop.ts line ~47: `const commitSha = ;` — missing the right-hand side value\n[Claude] CRITICAL: Unsafe non-null assertion at packages/agent/src/proxy.ts line ~157: `await reader!.read()` — if reader is null/undefined, this will throw at runtime. Should add a null check before the loop.\n[Gemini] CRITICAL: Syntax errors in `packages/agent/src/proxy.ts` (lines 121, 124, 139, 142) and `packages/orchestrator/src/eval-loop.ts` (line 47) render the code un-compilable due to missing arguments and variable values (e.g., `fetch(, {`, `Authorization: ,`, `commitSha = ;`).\n[Gemini] CRITICAL: The use of non-null assertion `reader!.read()` in `packages/agent/src/proxy.ts` (line 157) will cause a runtime crash if `reader` is null or undefined, and the surrounding context does not guarantee its initialization.\n[Copilot] CRITICAL: `eval-loop.ts` line ~55 — `const commitSha = ;` is a syntax error (missing value). The file will not compile, breaking any build that includes `packages/orchestrator`.\n[Codex] CRITICAL: `packages/orchestrator/src/eval-loop.ts` contains invalid TypeScript syntax at `const commitSha = ;`, which is a hard correctness failure that will break compilation/checks if this file is part of the package build.",
+      "Attempt 2 (cloud CI failed):\nApproach tried: Agent attempted to optimize the EvalLoop implementation for 10x performance improvement using an agent task, but the git push operation failed or was skipped, leaving the PR empty.\nRoot cause: The PR branch exists but has no commits pushed to it. The agent created the PR reference but failed to push the actual commits from the optimization work before triggering CI checks.\nFailed checks: gh pr checks",
+      "Attempt 3 (cloud CI failed):\nApproach tried: Optimization refactor targeting EvalLoop performance (10x speedup) by modifying proxy.ts, google-gemini-cli.ts, and eval-loop.ts, but commits were not pushed to the PR branch before running CI checks.\nRoot cause: The PR branch 'agent/task-optimize-1775412459776' exists but has no commits pushed to the remote. The gh CLI cannot retrieve PR checks without commits on the branch.\nFailed checks: gh pr checks"
+    ],
+    "startedAt": 1775412460028,
+    "model": "gpt-5-mini",
+    "completedAt": 1775413955465
+  }
+}

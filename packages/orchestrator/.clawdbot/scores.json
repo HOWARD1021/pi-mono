@@ -1,0 +1,15 @@
+{
+  "task-hello-eval": {
+    "taskId": "task-hello-eval",
+    "bestScore": 93.11,
+    "bestCommitSha": "0a342bb9e1fa79fffb287c38d4f275ec689910a4",
+    "entries": [
+      {
+        "generation": 1,
+        "score": 93.11,
+        "commitSha": "0a342bb9e1fa79fffb287c38d4f275ec689910a4",
+        "kept": true
+      }
+    ]
+  }
+}

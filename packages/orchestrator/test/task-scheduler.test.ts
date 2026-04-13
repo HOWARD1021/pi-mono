@@ -7,6 +7,7 @@ function makeTask(id: string, dependsOn: string[] = []): ParsedTask {
 		id,
 		title: id,
 		model: "claude-opus-4-6",
+		runner: "claude",
 		maxRetries: 3,
 		requiresScreenshots: false,
 		dependsOn,

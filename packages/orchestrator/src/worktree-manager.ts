@@ -22,6 +22,16 @@ export class WorktreeManager {
 		const shaRaw = execSync(`git rev-parse ${baseBranch}`, opts);
 		const baseCommitSha = shaRaw.toString().trim();
 
+		// If the path already exists (stale from a previous crashed run), prune + remove first
+		if (this.exists(taskId)) {
+			try {
+				execSync(`git worktree remove ${path} --force`, opts);
+			} catch {
+				// ignore — prune will clean up the ref
+			}
+			execSync("git worktree prune", opts);
+		}
+
 		// Create isolated worktree on a new branch
 		execSync(`git worktree add -b ${branch} ${path} ${baseBranch}`, opts);
 		// No npm install needed — monorepo hoists node_modules to root
@@ -40,9 +50,26 @@ export class WorktreeManager {
 	}
 
 	remove(worktreePath: string): void {
-		execSync(`git worktree remove ${worktreePath} --force`, {
-			cwd: this.repoRoot,
-			stdio: "pipe",
-		});
+		try {
+			execSync(`git worktree remove ${worktreePath} --force`, {
+				cwd: this.repoRoot,
+				stdio: "pipe",
+			});
+		} catch {
+			// Already removed externally — not an error
+		}
+	}
+
+	exists(taskId: string): boolean {
+		const path = join(this.worktreesDir, taskId);
+		try {
+			const list = execSync("git worktree list --porcelain", {
+				cwd: this.repoRoot,
+				stdio: "pipe",
+			}).toString();
+			return list.includes(path);
+		} catch {
+			return false;
+		}
 	}
 }

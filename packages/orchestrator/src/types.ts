@@ -2,6 +2,9 @@ export interface ParsedTask {
 	id: string;
 	title: string;
 	model: string; // default: "claude-opus-4-6"
+	runner: "claude" | "copilot"; // default: "claude"
+	fallbackModel?: string; // used on attempt > 1; defaults to model
+	fallbackRunner?: "claude" | "copilot"; // used on attempt > 1; defaults to runner
 	maxRetries: number; // default: 3
 	requiresScreenshots: boolean; // default: false
 	dependsOn: string[]; // task IDs that must complete first
@@ -12,6 +15,7 @@ export interface ParsedSpec {
 	feature: string;
 	contextFiles: string[]; // absolute paths, pre-validated
 	tasks: ParsedTask[];
+	eval?: EvalSpec; // present = run EvalLoop instead of runTaskWithRetry
 }
 
 export interface DefinitionOfDone {
@@ -73,4 +77,33 @@ export interface TaskRunResult {
 	prUrl?: string;
 	failureReason?: string;
 	attemptHistory: string[];
+}
+
+// ─── EvalLoop types ───────────────────────────────────────────────────────────
+
+export interface EvalResult {
+	score: number; // 0–100 (normalised)
+	details: string; // human-readable breakdown
+}
+
+export interface ScoreEntry {
+	generation: number;
+	score: number;
+	commitSha: string;
+	kept: boolean; // true = new best, false = discarded
+}
+
+export interface ScoreHistory {
+	taskId: string;
+	bestScore: number;
+	bestCommitSha: string;
+	entries: ScoreEntry[];
+}
+
+export interface EvalSpec {
+	type: "track-a" | "track-b" | "hybrid";
+	runner: string; // "code-coverage" | "skill-judge" | ...
+	target: number; // stop when score >= target
+	timeBudgetMs?: number;
+	maxGenerations?: number;
 }

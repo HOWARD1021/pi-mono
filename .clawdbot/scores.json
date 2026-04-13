@@ -1,0 +1,34 @@
+{
+  "task-hello-eval": {
+    "taskId": "task-hello-eval",
+    "bestScore": 93.44,
+    "bestCommitSha": "003531853593fa25938f9f5a8a2fd0c928e22cda",
+    "entries": [
+      {
+        "generation": 1,
+        "score": 93.44,
+        "commitSha": "003531853593fa25938f9f5a8a2fd0c928e22cda",
+        "kept": true
+      }
+    ]
+  },
+  "task-eval-coverage": {
+    "taskId": "task-eval-coverage",
+    "bestScore": 93.46,
+    "bestCommitSha": "e72254dcf85d3bedd392ccfb10c5a7ff8ad381f1",
+    "entries": [
+      {
+        "generation": 1,
+        "score": 87.21,
+        "commitSha": "279100f3ead2d69ee980d64b757738763d0931d1",
+        "kept": true
+      },
+      {
+        "generation": 2,
+        "score": 93.46,
+        "commitSha": "e72254dcf85d3bedd392ccfb10c5a7ff8ad381f1",
+        "kept": true
+      }
+    ]
+  }
+}

@@ -2,21 +2,33 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import type { ParsedSpec, ParsedTask } from "./types.js";
+import type { EvalSpec, ParsedSpec, ParsedTask } from "./types.js";
 
 const TaskFrontmatterSchema = z.object({
 	id: z.string().min(1),
 	title: z.string().min(1),
 	model: z.string().default("claude-opus-4-6"),
+	runner: z.enum(["claude", "copilot"]).default("claude"),
+	"fallback-model": z.string().optional(),
+	"fallback-runner": z.enum(["claude", "copilot"]).optional(),
 	"max-retries": z.number().int().min(1).default(3),
 	"requires-screenshots": z.boolean().default(false),
 	"depends-on": z.array(z.string()).default([]),
+});
+
+const EvalFrontmatterSchema = z.object({
+	type: z.enum(["track-a", "track-b", "hybrid"]),
+	runner: z.string().min(1),
+	target: z.number(),
+	"max-generations": z.number().int().min(1).optional(),
+	"time-budget-ms": z.number().int().min(1).optional(),
 });
 
 const SpecFrontmatterSchema = z.object({
 	feature: z.string().min(1),
 	context: z.array(z.string()).default([]),
 	tasks: z.array(TaskFrontmatterSchema).min(1),
+	eval: EvalFrontmatterSchema.optional(),
 });
 
 export class SpecValidationError extends Error {
@@ -92,15 +104,30 @@ export function parseSpec(filePath: string): ParsedSpec {
 		id: t.id,
 		title: t.title,
 		model: t.model,
+		runner: t.runner,
+		fallbackModel: t["fallback-model"],
+		fallbackRunner: t["fallback-runner"],
 		maxRetries: t["max-retries"],
 		requiresScreenshots: t["requires-screenshots"],
 		dependsOn: t["depends-on"],
 		description: taskBodies.get(t.id)!,
 	}));
 
+	let evalSpec: EvalSpec | undefined;
+	if (fm.eval) {
+		evalSpec = {
+			type: fm.eval.type,
+			runner: fm.eval.runner,
+			target: fm.eval.target,
+			maxGenerations: fm.eval["max-generations"],
+			timeBudgetMs: fm.eval["time-budget-ms"],
+		};
+	}
+
 	return {
 		feature: fm.feature,
 		contextFiles: fm.context.map((p) => resolve(specDir, p)),
 		tasks,
+		eval: evalSpec,
 	};
 }

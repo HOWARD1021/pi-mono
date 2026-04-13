@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildPrompt } from "../src/prompt-builder.js";
-import type { ParsedTask } from "../src/types.js";
+import type { ParsedTask, ScoreHistory } from "../src/types.js";
 
 const task: ParsedTask = {
 	id: "task-1",
 	title: "Build API",
 	model: "claude-opus-4-6",
+	runner: "claude",
 	maxRetries: 3,
 	requiresScreenshots: false,
 	dependsOn: [],
@@ -58,5 +59,64 @@ describe("PromptBuilder", () => {
 		const screenshotTask = { ...task, requiresScreenshots: true };
 		const p = buildPrompt(screenshotTask, "", [], "");
 		expect(p).toContain("screenshot");
+	});
+
+	it("mandatory final output section appears AFTER gate steps", () => {
+		const p = buildPrompt(task, "", [], "");
+		const gateIdx = p.indexOf("Local Completion Gate");
+		const mandatoryIdx = p.indexOf("MANDATORY FINAL OUTPUT");
+		expect(mandatoryIdx).toBeGreaterThan(gateIdx);
+		expect(p).toContain("LAST output");
+		expect(p).toContain("marked FAILED");
+	});
+});
+
+describe("PromptBuilder — score history", () => {
+	const scoreHistory: ScoreHistory = {
+		taskId: "task-1",
+		bestScore: 72,
+		bestCommitSha: "abc1234",
+		entries: [
+			{ generation: 1, score: 51, commitSha: "sha1", kept: false },
+			{ generation: 2, score: 63, commitSha: "sha2", kept: true },
+			{ generation: 3, score: 72, commitSha: "abc1234", kept: true },
+			{ generation: 4, score: 68, commitSha: "sha4", kept: false },
+		],
+	};
+
+	it("includes Score History section when scoreHistory provided", () => {
+		const p = buildPrompt(task, "", [], "", scoreHistory);
+		expect(p).toContain("Score History");
+	});
+
+	it("shows best score and which generation it came from", () => {
+		const p = buildPrompt(task, "", [], "", scoreHistory);
+		expect(p).toContain("72");
+		expect(p).toContain("generation 3");
+	});
+
+	it("shows last attempt score and kept/dropped status", () => {
+		const p = buildPrompt(task, "", [], "", scoreHistory);
+		expect(p).toContain("68");
+		expect(p).toMatch(/dropped|discard/i);
+	});
+
+	it("lists all generation entries", () => {
+		const p = buildPrompt(task, "", [], "", scoreHistory);
+		expect(p).toContain("gen 1");
+		expect(p).toContain("gen 2");
+		expect(p).toContain("gen 3");
+		expect(p).toContain("gen 4");
+	});
+
+	it("includes beat-the-best prompt nudge", () => {
+		const p = buildPrompt(task, "", [], "", scoreHistory);
+		expect(p).toMatch(/beat|improve|exceed/i);
+		expect(p).toContain("72");
+	});
+
+	it("omits Score History section when scoreHistory is not provided", () => {
+		const p = buildPrompt(task, "", [], "");
+		expect(p).not.toContain("Score History");
 	});
 });

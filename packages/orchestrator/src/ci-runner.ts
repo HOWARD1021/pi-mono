@@ -23,11 +23,18 @@ export class CIRunner {
 		return { passed: true, failedChecks: [], errorOutput: "" };
 	}
 
-	async runCloud(_branch: string): Promise<CIResult> {
+	async runCloud(branch: string): Promise<CIResult> {
 		try {
-			const raw = execSync(`gh pr checks --json name,state --watch --interval 30`, {
+			// --watch waits for checks to complete; --json is incompatible with --watch
+			// so we wait first, then fetch results separately
+			execSync(`gh pr checks "${branch}" --watch --interval 30`, {
 				stdio: "pipe",
 				timeout: 20 * 60 * 1000,
+			});
+
+			const raw = execSync(`gh pr checks "${branch}" --json name,state`, {
+				stdio: "pipe",
+				timeout: 30_000,
 			}).toString();
 
 			const checks: Array<{ name: string; state: string }> = JSON.parse(raw);
@@ -40,9 +47,9 @@ export class CIRunner {
 			};
 		} catch (e) {
 			const msg = (e as Error).message;
-			// "no checks reported" means the repo has no CI configured — treat as passed
-			if (msg.includes("no checks reported")) {
-				console.log(`[CI] No cloud checks configured — skipping`);
+			// No CI configured or no PR yet — treat as passed
+			if (msg.includes("no checks reported") || msg.includes("no checks") || msg.includes("no pull request")) {
+				console.log(`[CI] No cloud checks for ${branch} — skipping`);
 				return { passed: true, failedChecks: [], errorOutput: "" };
 			}
 			return {

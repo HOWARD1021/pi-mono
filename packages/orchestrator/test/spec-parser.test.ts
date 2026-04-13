@@ -81,4 +81,106 @@ describe("SpecParser", () => {
 			}
 		});
 	});
+
+	describe("fallback model / runner", () => {
+		it("parses fallback-model and fallback-runner when declared", () => {
+			const spec = parseSpec(join(FIXTURES, "fallback-spec.md"));
+			expect(spec.tasks[0].fallbackModel).toBe("claude-sonnet-4-6");
+			expect(spec.tasks[0].fallbackRunner).toBe("claude");
+		});
+
+		it("fallbackModel and fallbackRunner are undefined when not declared", () => {
+			const spec = parseSpec(join(FIXTURES, "simple-spec.md"));
+			expect(spec.tasks[0].fallbackModel).toBeUndefined();
+			expect(spec.tasks[0].fallbackRunner).toBeUndefined();
+		});
+
+		it("allows setting fallback-model without fallback-runner", () => {
+			let tempDir = "";
+			try {
+				tempDir = join(tmpdir(), `spec-test-${Date.now()}`);
+				mkdirSync(tempDir, { recursive: true });
+				const specPath = join(tempDir, "spec.md");
+				writeFileSync(
+					specPath,
+					`---\nfeature: Test\ntasks:\n  - id: task-1\n    title: T\n    fallback-model: claude-opus-4-6\n---\n\n## task-1\n\nDo it.`,
+				);
+				const spec = parseSpec(specPath);
+				expect(spec.tasks[0].fallbackModel).toBe("claude-opus-4-6");
+				expect(spec.tasks[0].fallbackRunner).toBeUndefined();
+			} finally {
+				if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+			}
+		});
+	});
+
+	describe("eval spec parsing", () => {
+		function makeEvalSpec(evalBlock: string): string {
+			return `---
+feature: Eval Test
+${evalBlock}
+tasks:
+  - id: task-1
+    title: Improve coverage
+---
+
+## task-1
+
+Write more tests.
+`;
+		}
+
+		it("parses eval block with type, runner, target", () => {
+			let tempDir = "";
+			try {
+				tempDir = join(tmpdir(), `spec-test-${Date.now()}`);
+				mkdirSync(tempDir, { recursive: true });
+				const specPath = join(tempDir, "spec.md");
+				writeFileSync(
+					specPath,
+					makeEvalSpec(`eval:
+  type: track-a
+  runner: code-coverage
+  target: 85`),
+				);
+
+				const spec = parseSpec(specPath);
+				expect(spec.eval).toBeDefined();
+				expect(spec.eval!.type).toBe("track-a");
+				expect(spec.eval!.runner).toBe("code-coverage");
+				expect(spec.eval!.target).toBe(85);
+			} finally {
+				if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("parses optional maxGenerations and timeBudgetMs", () => {
+			let tempDir = "";
+			try {
+				tempDir = join(tmpdir(), `spec-test-${Date.now()}`);
+				mkdirSync(tempDir, { recursive: true });
+				const specPath = join(tempDir, "spec.md");
+				writeFileSync(
+					specPath,
+					makeEvalSpec(`eval:
+  type: track-a
+  runner: code-coverage
+  target: 90
+  max-generations: 10
+  time-budget-ms: 3600000`),
+				);
+
+				const spec = parseSpec(specPath);
+				expect(spec.eval!.maxGenerations).toBe(10);
+				expect(spec.eval!.timeBudgetMs).toBe(3600000);
+			} finally {
+				if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("eval is undefined when not present", () => {
+			const spec = parseSpec(join(FIXTURES, "simple-spec.md"));
+			expect(spec.eval).toBeUndefined();
+		});
+	});
 });
